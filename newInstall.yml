@@ -13,6 +13,7 @@
         - gparted
         - keepassx
         - openssh-server
+        - sshuttle
         - pastebinit
         - rsnapshot
         - ubuntu-restricted-extras
@@ -25,6 +26,9 @@
         - rng-tools
         - tree
         - mediainfo
+    register: apt_output
+
+  - debug: var=apt_output
 
   - name: Install VPNs
     become: true
@@ -35,7 +39,10 @@
       name: 
         - network-manager-vpnc-gnome
         - network-manager-openconnect-gnome  
-  
+    register: apt_output
+
+  - debug: var=apt_output
+
   - name: Install Virtualization
     become: true
     apt: 
@@ -46,6 +53,9 @@
         - qemu-kvm
         - libvirt-clients
         - virt-manager
+    register: apt_output
+
+  - debug: var=apt_output
 
   - name: Install dev-tools
     become: true
