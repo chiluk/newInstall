@@ -1,0 +1,119 @@
+---
+- hosts: local
+  tasks:
+  - name: Install Misc Packages  
+    become: true
+    apt: 
+      force_apt_get: true   
+      state: present 
+      update_cache: true
+      name: 
+        - gnome-tweaks
+        - gnupg-agent
+        - gparted
+        - keepassx
+        - openssh-server
+        - pastebinit
+        - rsnapshot
+        - ubuntu-restricted-extras
+        - vim
+        - vlc
+        - wireshark
+        - synaptic
+        - quassel-client
+        - yubikey-personalization
+        - rng-tools
+        - tree
+        - mediainfo
+
+  - name: Install VPNs
+    become: true
+    apt: 
+      force_apt_get: true   
+      state: present 
+      update_cache: true
+      name: 
+        - network-manager-vpnc-gnome
+        - network-manager-openconnect-gnome  
+  
+  - name: Install Virtualization
+    become: true
+    apt: 
+      force_apt_get: true   
+      state: present 
+      update_cache: true
+      name: 
+        - qemu-kvm
+        - libvirt-clients
+        - virt-manager
+
+  - name: Install dev-tools
+    become: true
+    apt: 
+      force_apt_get: true   
+      state: present 
+      update_cache: true
+      name: 
+        - build-essential
+        - cscope 
+        - elfutils 
+        - libdw-dev 
+        - libncurses5-dev 
+        - manpages-dev 
+        - devscripts 
+        - git 
+        - gitk 
+        - git-email 
+        - debhelper 
+        - sbuild 
+        - subversion 
+        - sysstat 
+        - ubuntu-dev-tools 
+        - autoconf 
+        - autotools-dev 
+        - bison 
+        - texinfo 
+        - texi2html 
+        - texlive-latex-base 
+        - ghostscript 
+        - texlive-fonts-recommended 
+        - fakeroot 
+        - kernel-wedge 
+        - kernel-package 
+        - dh-autoreconf 
+        - dh-translations 
+        - gobject-introspection 
+        - dpatch 
+        - pbuilder-scripts 
+        - jq 
+    register: apt_output
+
+  - debug: var=apt_output
+
+  - name: Install Graphics programs
+    become: true
+    apt: 
+      force_apt_get: true   
+      state: present 
+      update_cache: true
+      name: 
+        - gimp
+        - luminance-hdr
+        - hugin
+        - darktable
+    register: apt_output
+
+  - debug: var=apt_output
+
+  - name: Install Power programs
+    become: true
+    apt: 
+      force_apt_get: true   
+      state: present 
+      update_cache: true
+      name: 
+        - powertop
+        - powerstat
+    register: apt_output
+
+  - debug: var=apt_output
