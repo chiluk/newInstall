@@ -127,3 +127,7 @@
     register: apt_output
 
   - debug: var=apt_output
+
+# TODO Add install Chrome
+# TODO Add install vscode
+# TODO Add install jetbrains toolbox
