@@ -128,6 +128,46 @@
 
   - debug: var=apt_output
 
+  - name: Install classic snap packages
+    become: true
+    snap:
+      name:
+        - slack
+        - code
+      state: present
+      classic: yes
+    register: snap_output
+
+  - debug: var=snap_output
+
+  - name: Install snap packages
+    become: true
+    snap:
+      name:
+        - zoom-client
+        - spotify
+      state: present
+    register: snap_output
+
+  - debug: var=snap_output
+
+# # Download out of repo packages
+#   - name: Download out of repo packages
+#     become: true
+#     get_url:
+#       url:
+#         - https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+
+#       dest: Downloads
+
+#   - name: Install out of repo Packages
+#     apt: 
+#       state: present 
+#       deb: 
+#         - Downloads/google-chrome-stable_current_amd64.deb
+#     register: apt_output
+
+#   - debug: var=apt_output
+
 # TODO Add install Chrome
-# TODO Add install vscode
 # TODO Add install jetbrains toolbox
