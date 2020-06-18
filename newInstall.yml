@@ -26,6 +26,7 @@
         - rng-tools
         - tree
         - mediainfo
+        - simple-scan
     register: apt_output
 
   - debug: var=apt_output
