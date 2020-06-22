@@ -97,6 +97,8 @@
         - dpatch 
         - pbuilder-scripts 
         - jq 
+        - python3-pip
+        - python-is-python3
     register: apt_output
 
   - debug: var=apt_output
