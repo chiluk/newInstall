@@ -27,6 +27,7 @@
         - tree
         - mediainfo
         - simple-scan
+        - net-tools
     register: apt_output
 
   - debug: var=apt_output
