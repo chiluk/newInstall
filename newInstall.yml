@@ -28,8 +28,22 @@
         - mediainfo
         - simple-scan
         - net-tools
+        - nmap
+        - htop
     register: apt_output
 
+  - debug: var=apt_output
+
+  - name: Transcoding and video
+    become: true
+    apt:
+      force_apt_get: true
+      state: present
+      update_cache: true
+      name:
+        - intel-gpu-tools
+        - ffmpeg
+    register: apt_output
   - debug: var=apt_output
 
   - name: Install VPNs
@@ -101,6 +115,7 @@
         - python3-pip
         - python-is-python3
         - meld
+        - perf-tools-unstable
     register: apt_output
 
   - debug: var=apt_output
@@ -192,6 +207,7 @@
 # TODO Add install jetbrains toolbox
 # TODO Printer setup
 # TODO Add mysql-workbench-community
+# Add discord, slack
 # change keybinding for ibus-setup emojis to super+e to avoid interfereing with ctrl+shift+e vert split for terminator.
 #   Ref: https://bugs.launchpad.net/ubuntu/+source/terminator/+bug/1738500
 
