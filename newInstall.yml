@@ -30,6 +30,8 @@
         - net-tools
         - nmap
         - htop
+        - screen
+        - tmux
     register: apt_output
 
   - debug: var=apt_output
