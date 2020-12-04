@@ -9,6 +9,7 @@
       update_cache: true
       name: 
         - gnome-tweaks
+        - gnome-tweak-tool
         - gnupg-agent
         - gparted
         - keepassx
@@ -187,6 +188,22 @@
 
   - debug: var=snap_output
 
+- hosts: bonus
+  tasks:
+  - name: Configure backups
+    cron:
+      cronfile: rsnapshot
+      name: "rsnapshot weekly"
+      minute: "0"
+      hour: "3"
+      weekday: "6"
+      job: "/usr/bin/rsnapshot weekly"
+    cron:
+      name: "rsnapshot monthly"
+      minute: "30"
+      hour: "1"
+      day: "1"
+      job: "/usr/bin/rsnapshot monthly"
 # # Download out of repo packages
 #   - name: Download out of repo packages
 #     become: true
