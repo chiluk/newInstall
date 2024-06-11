@@ -1,0 +1,11 @@
+---
+ungrouped:
+    hosts:
+        bertha:
+        bonus:
+nas:
+    hosts:
+        bonus:
+laptops:
+    hosts:
+        bertha:

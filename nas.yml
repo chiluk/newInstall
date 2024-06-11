@@ -1,0 +1,149 @@
+---
+- name: Create a new NAS
+  hosts: nas
+  tasks: 
+  - name: Install server packages
+    become: true
+    apt: 
+      force_apt_get: true   
+      state: present 
+      update_cache: true
+      name: 
+        - openssh-server
+        - sshuttle
+        - pastebinit
+        - rsnapshot
+        - ubuntu-restricted-extras
+        - vim
+        - nfs-common
+        - rng-tools
+        - tree
+        - net-tools
+        - nmap
+        - htop
+        - screen
+        - tmux
+        - zfsutils-linux
+        - powertop
+        - powerstat
+        - python3-pip
+        - python-is-python3
+        - iotop
+        - zfsutils-linux
+        - ufw
+    register: apt_output
+
+  - debug: var=apt_output
+
+  - name: Check for /z     
+    stat: path=/z
+    register: p
+
+  - name: import /z
+    become: true
+    command: zpool import z
+    when: not p.stat.exists
+
+  - name: turnoff atime on z
+    become: true
+    command: zfs set atime=off z
+    when: not p.stat.exists
+
+  - name: Install dev-tools
+    become: true
+    apt: 
+      force_apt_get: true   
+      state: present 
+      update_cache: true
+      name: 
+        - ubuntu-dev-tools 
+        - build-essential
+        - cscope 
+        - elfutils 
+        - libdw-dev 
+        - libncurses5-dev 
+        - manpages-dev 
+        - devscripts 
+        - git 
+        - gitk 
+        - git-email 
+        - debhelper 
+        - sbuild 
+        - subversion 
+        - sysstat 
+        - autoconf 
+        - autotools-dev 
+        - bison 
+        - texinfo 
+        - texi2html 
+        - texlive-latex-base 
+        - ghostscript 
+        - texlive-fonts-recommended 
+        - fakeroot
+        - dh-autoreconf 
+        - dh-translations 
+        - gobject-introspection 
+        - pbuilder-scripts 
+        - jq 
+        - perf-tools-unstable
+        - ansible
+        - ansible-lint
+        - curl
+    register: apt_output
+
+  - name: Transcoding and video
+    become: true
+    apt:
+      force_apt_get: true
+      state: present
+      update_cache: true
+      name:
+        - intel-gpu-tools
+        - ffmpeg
+        - mediainfo
+    register: apt_output
+  - debug: var=apt_output
+
+# - hosts: bonus
+#   tasks:
+#   - name: Configure backups
+#     cron:
+#       cronfile: rsnapshot
+#       name: "rsnapshot weekly"
+#       minute: "0"
+#       hour: "3"
+#       weekday: "6"
+#       job: "/usr/bin/rsnapshot weekly"
+#     cron:
+#       name: "rsnapshot monthly"
+#       minute: "30"
+#       hour: "1"
+#       day: "1"
+#       job: "/usr/bin/rsnapshot monthly"
+
+# # Download out of repo packages
+#   - name: Download out of repo packages
+#     become: true
+#     get_url:
+#       url:
+#         - https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+
+#       dest: Downloads
+
+#   - name: Install out of repo Packages
+#     apt: 
+#       state: present 
+#       deb: 
+#         - Downloads/google-chrome-stable_current_amd64.deb
+#     register: apt_output
+
+#   - debug: var=apt_output
+
+# TODO Add install Chrome
+# TODO Add install jetbrains toolbox
+# TODO Printer setup
+# TODO Add mysql-workbench-community
+# Add discord, slack
+# change keybinding for ibus-setup emojis to super+e to avoid interfereing with ctrl+shift+e vert split for terminator.
+#   Ref: https://bugs.launchpad.net/ubuntu/+source/terminator/+bug/1738500
+
