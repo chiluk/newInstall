@@ -16,6 +16,7 @@
         - ubuntu-restricted-extras
         - vim
         - nfs-common
+        - nfs-kernel-server
         - rng-tools
         - tree
         - net-tools
@@ -48,6 +49,21 @@
     become: true
     command: zfs set atime=off z
     when: not p.stat.exists
+
+  - name: Configure nfsd
+    become: true
+    copy:
+      src: "files/exports"
+      dest: "/etc/exports"
+      owner: "root"
+      group: "root"
+      mode: 0644
+    register: exports
+
+  - name: export
+    become: true
+    command: exportfs -a
+    when: exports.changed
 
   - name: Install dev-tools
     become: true
