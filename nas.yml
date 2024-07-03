@@ -22,20 +22,32 @@
         - net-tools
         - nmap
         - htop
+        - iotop
         - screen
         - tmux
         - zfsutils-linux
-        - powertop
-        - powerstat
         - python3-pip
         - python-is-python3
-        - iotop
         - zfsutils-linux
         - ufw
+        - hdparm
+        - smartmontools
+        - fail2ban
     register: apt_output
 
-  - debug: var=apt_output
-
+  - name: Install power utilies
+    become: true
+    apt: 
+      force_apt_get: true   
+      state: present 
+      update_cache: true
+      name: 
+        - powertop
+        - powerstat
+        - intel-lpmd
+        - intel-gpu-tools
+        # - linux-tools-intel - just intel changelog
+        # - intel-media-va-driver-non-free ??
   - name: Check for /z     
     stat: path=/z
     register: p
@@ -120,6 +132,66 @@
     register: apt_output
   - debug: var=apt_output
 
+  # configure ssh
+  - name: Configure sshd
+    become: true
+    lineinfile:
+      path: "/etc/ssh/sshd_config"
+      regex: "^(#)?{{item.key}}"
+      line: "{{item.key}} {{item.value}}"
+      state: present
+    loop:
+      - { key: "PermitRootLogin", value: "no" }
+      - { key: "PasswordAuthentication", value: "no" } 
+    notify:
+      - restart sshd
+
+  # Calls any handlers that have been called up to this point.
+  - name: Flush sshd restart handler.
+    meta: flush_handlers
+
+  # configure fail2ban
+  - name: create fail2ban/jail.local
+    become: true
+    copy: 
+      src: files/jail.local 
+      dest: /etc/fail2ban/jail.local
+      owner: "root"
+      group: "root"
+      mode: 0644
+    notify: restart fail2ban
+
+  - name: Flush fail2ban restart handler.
+    meta: flush_handlers
+
+  - name: Configure hdparm to spin down drives
+    become: true
+    copy:
+      src: "files/hdparm.conf"
+      dest: "/etc/"
+      owner: "root"
+      group: "root"
+      mode: 0644
+    register: hdparm
+
+  - name: run hdparm 
+    become: true
+    command: /usr/lib/pm-utils/power.d/95hdparm-apm resume
+    when: hdparm.changed
+
+  handlers:
+    - name: restart sshd
+      become: true
+      service:
+        name: ssh
+        state: restarted
+  
+    - name: restart fail2ban
+      become: true
+      service:
+        name: fail2ban
+        state: restarted
+  
 # - hosts: bonus
 #   tasks:
 #   - name: Configure backups
