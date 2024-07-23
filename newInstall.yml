@@ -135,7 +135,17 @@
         - hugin
         - darktable
     register: apt_output
+  - debug: var=apt_output
 
+  - name: Install Audio programs
+    become: true
+    apt: 
+      force_apt_get: true   
+      state: present 
+      update_cache: true
+      name: 
+        - easyeffects 
+    register: apt_output
   - debug: var=apt_output
 
   - name: Install Power programs
@@ -174,7 +184,6 @@
       state: present
       classic: yes
     register: snap_output
-
   - debug: var=snap_output
 
   - name: Install snap packages

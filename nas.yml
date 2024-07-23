@@ -35,7 +35,7 @@
         - fail2ban
     register: apt_output
 
-  - name: Install power utilies
+  - name: Install power and temp utilies
     become: true
     apt: 
       force_apt_get: true   
@@ -46,6 +46,7 @@
         - powerstat
         - intel-lpmd
         - intel-gpu-tools
+        - lm-sensors
         # - linux-tools-intel - just intel changelog
         # - intel-media-va-driver-non-free ??
   - name: Check for /z     
