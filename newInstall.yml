@@ -33,6 +33,7 @@
         - htop
         - screen
         - tmux
+        - btop
     register: apt_output
 
   - debug: var=apt_output

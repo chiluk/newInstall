@@ -33,6 +33,7 @@
         - hdparm
         - smartmontools
         - fail2ban
+        - btop
     register: apt_output
 
   - name: Install power and temp utilies
@@ -130,6 +131,7 @@
         - intel-gpu-tools
         - ffmpeg
         - mediainfo
+        - lsscsi
     register: apt_output
   - debug: var=apt_output
 
