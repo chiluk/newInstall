@@ -10,15 +10,19 @@
 #   LXD (profile eth0 parent=br0) and podman (host/bridged networking) ride
 #   br0, so all three stacks egress via the bond.
 #
-# NOTE: netplan is strict about missing interfaces — the Jinja loop below
-# filters bond_slaves against ansible_interfaces so a disabled/absent NIC
-# never breaks `netplan apply`.
+# NOTE: all five NIC names from the installer netplan are declared even though
+# four are currently BIOS-disabled (invisible to lspci). netplan/systemd-networkd
+# tolerate absent interfaces: the .network files simply wait, and when a NIC
+# reappears after a BIOS re-enable + reboot, networkd enslaves it into bond0
+# automatically — no OS reconfiguration needed. (Verified: the installer's own
+# generated /run/systemd/network/10-netplan-{enp8s0,enp49s0,enp87s0,enp88s0}
+# .network files exist today for NICs that aren't present.)
 network:
   version: 2
   renderer: networkd
 
   ethernets:
-{% for nic in bond_slaves if nic in ansible_interfaces %}
+{% for nic in bond_slaves %}
     {{ nic }}:
       dhcp4: false
       dhcp6: false
@@ -27,14 +31,14 @@ network:
   bonds:
     bond0:
       interfaces:
-{% for nic in bond_slaves if nic in ansible_interfaces %}
+{% for nic in bond_slaves %}
         - {{ nic }}
 {% endfor %}
       parameters:
         mode: active-backup
         primary: {{ bond_primary }}
         primary-reselect-policy: always
-        miimon: 100
+        mii-monitor-interval: 100
       dhcp4: false
       dhcp6: false
 

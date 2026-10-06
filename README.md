@@ -13,13 +13,19 @@ nas.yml was rewritten to match the live state of bonus (Ubuntu 24.04.5, kernel
 
 ### Network / NFS
 - NEW (2026-10-06): bond topology now managed by ansible (tag: network).
-  Physical NICs -> bond0 (active-backup, primary enp2s0, miimon 100) ->
-  br0 (bridge, DHCP metric 100). Template: files/netplan.yaml.j2.
-  bonus's 2nd RTL8127 is BIOS-disabled for power testing; when re-enabled,
-  uncomment its iface in the `bond_slaves` var and re-run --tags network.
+  Physical NICs -> bond0 (active-backup, primary enp2s0, mii-monitor 100ms)
+  -> br0 (bridge, DHCP metric 100). Template: files/netplan.yaml.j2.
+  ALL FIVE installer NIC names are bond slaves (enp2s0, enp8s0, enp49s0,
+  enp87s0, enp88s0) — four are BIOS-disabled for power testing today.
+  systemd-networkd tolerates absent NICs (the installer already ships
+  waiting .network files for them), so re-enabling any NIC in BIOS + reboot
+  auto-enslaves it into bond0 with NO OS reconfiguration.
   `netplan apply` is tagged never-run-automatically (SSH blip risk; prefer
   `sudo netplan try` on a live box). Installer 50-cloud-init.yaml is removed
   (it would override our config; cloud-init is already disabled on the box).
+  Verified with `netplan generate`: clean parse, bond0.netdev gets
+  Mode=active-backup MIIMonitorSec=100ms PrimaryReselectPolicy=always,
+  enp2s0 gets PrimarySlave=true, all 5 NICs get Bond=bond0 files.
 - LAN moved 192.168.1.1/24 -> 192.168.0.1/16 (files/exports updated).
 - NFS export gained `crossmnt` (so z/backup shows under /z for v4 clients).
 - /etc/nfs.conf: `[mountd] manage-gids=y` (new task).

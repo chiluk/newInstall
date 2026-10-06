@@ -8,14 +8,19 @@
   hosts: nas
   become: true
   vars:
-    # Physical NICs for the bond. bonus has 2x RTL8127 10GbE but the 2nd is
-    # disabled in BIOS for power testing (invisible to lspci). active-backup
-    # keeps the bond single-NIC safe today; when the 2nd NIC is enabled in
-    # BIOS, add its interface name below and re-run the network tag.
+    # Physical NICs for the bond — all five names from the installer netplan.
+    # Only enp2s0 is currently visible; the other four are BIOS-disabled for
+    # power testing. They stay declared here so re-enabling any of them in BIOS
+    # + reboot auto-enslaves them into bond0 with NO OS changes.
+    # (Names recovered from the installer config: /run/systemd/network/
+    #  10-netplan-{enp2s0,enp8s0,enp49s0,enp87s0,enp88s0}.network)
     bond_primary: enp2s0
     bond_slaves:
       - enp2s0
-      # - enp3s0   # 2nd RTL8127 — enable in BIOS, then uncomment (verify name)
+      - enp8s0
+      - enp49s0
+      - enp87s0
+      - enp88s0
   tasks:
 
   # ---------------------------------------------------------------- packages
