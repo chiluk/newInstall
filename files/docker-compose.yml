@@ -1,0 +1,86 @@
+# Reconstructed 2026-10-05 from `docker inspect` of live bonus.
+# All persistent state lives in bind mounts under /z (survives OS reinstall as long
+# as the z pool is imported, not wiped). Custom images (ipex_llm_chiluk,
+# bookworm-build) have NO Dockerfile on the box — `docker save` them BEFORE
+# reformatting or they are gone. Public images re-pull fine.
+#
+# Usage after reinstall:  docker compose -f docker-compose.yml up -d
+# (compose v2 plugin; or `docker-compose`)
+services:
+  plex:
+    image: plexinc/pms-docker
+    container_name: plex
+    network_mode: host
+    restart: unless-stopped
+    devices:
+      - /dev/dri:/dev/dri
+    volumes:
+      - /z/plex/config:/config
+      - /z/plex/transcode:/transcode
+      - /z:/z
+    environment:
+      TZ: US/Central
+      PLEX_UID: "1000"
+      PLEX_GID: "1000"
+      PLEX_CLAIM: claim-ejhBxQ7Lw3P4z2nuz6Wz
+      CHANGE_CONFIG_DIR_OWNERSHIP: "true"
+
+  homeassistant:
+    image: homeassistant/home-assistant:stable
+    container_name: homeassistant
+    network_mode: host
+    privileged: true
+    restart: unless-stopped
+    volumes:
+      - /z/containers/homeassistant/config:/config
+    environment:
+      TZ: America/Chicago   # live box had TZ=MY_TIME_ZONE (unset placeholder); fixed here
+
+  ARM:
+    image: automaticrippingmachine/automatic-ripping-machine:latest
+    container_name: ARM
+    restart: always
+    privileged: true
+    devices:
+      - /dev/sr0:/dev/sr0
+    ports:
+      - "8080:8080"
+    volumes:
+      - /z/arm:/home/arm
+      - /z/arm/logs:/home/arm/logs
+      - /z/arm/config:/etc/arm/config
+    environment:
+      ARM_UID: "1001"
+      ARM_GID: "1001"
+      TZ: America/Chicago
+
+  ollama:
+    image: ollama/ollama
+    container_name: ollama
+    restart: unless-stopped
+    devices:
+      - /dev/dri:/dev/dri
+    ports:
+      - "11434:11434"
+    volumes:
+      # CHANGED from live (/home/chiluk/.ollama, root disk — dies on reinstall).
+      # Backup script rsyncs the 8G of models to /z/ollama; z survives the OS wipe.
+      - /z/ollama:/root/.ollama
+    environment:
+      OLLAMA_HOST: 0.0.0.0
+
+  # Custom-built image (16 months old, no Dockerfile on box). MUST be docker save'd.
+  ipex-llm-chiluk:
+    image: ipex_llm_chiluk:latest
+    container_name: ipex-llm-chiluk
+    network_mode: host
+    restart: "no"
+    shm_size: "16g"
+    devices:
+      - /dev/dri:/dev/dri
+    volumes:
+      - /z/ai/models:/models
+    environment:
+      DEVICE: iGPU
+      bench_model: mistral-7b-v0.1.Q4_0.gguf
+    command: ["/bin/bash"]
