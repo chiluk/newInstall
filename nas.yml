@@ -1,14 +1,20 @@
 ---
+# NAS profile — synced against live bonus on 2026-10-05.
+# See README.md "bonus drift report" for what changed since the original nas.yml.
+#
+# Tags: packages, zfs, nfs, samba, docker, lxd, leds, security, power
 - name: Create a new NAS
   hosts: nas
-  tasks: 
+  become: true
+  tasks:
+
+  # ---------------------------------------------------------------- packages
   - name: Install server packages
-    become: true
-    apt: 
-      force_apt_get: true   
-      state: present 
+    apt:
+      force_apt_get: true
+      state: present
       update_cache: true
-      name: 
+      name:
         - openssh-server
         - sshuttle
         - pastebinit
@@ -17,7 +23,6 @@
         - vim
         - nfs-common
         - nfs-kernel-server
-        - rng-tools
         - tree
         - net-tools
         - nmap
@@ -28,213 +33,376 @@
         - zfsutils-linux
         - python3-pip
         - python-is-python3
-        - zfsutils-linux
         - ufw
         - hdparm
         - smartmontools
         - fail2ban
         - btop
-    register: apt_output
+        # --- added since original nas.yml (present on live bonus) ---
+        - atop                 # continuous process recorder (enabled+active)
+        - pcp                  # performance co-pilot (pmcd/pmlogger enabled)
+        - schroot              # chroot build envs
+        - samba                # SMB/CIFS server ([z] share, see below)
+        - unattended-upgrades  # periodic list-update + upgrade both =1
+        - dkms                 # needed for led-ugreen kmod
+        - linux-generic-hwe-24.04-edge   # live kernel is 7.0.0-34 HWE-edge, not GA
+    tags: [packages]
+  # NOTE: rng-tools and libncurses5-dev from the original list are NOT installed
+  # on live bonus (rng-tools removed; libncurses5-dev never installed on noble).
+  # Dropped to match reality. Re-add if you actually miss them.
 
-  - name: Install power and temp utilies
-    become: true
-    apt: 
-      force_apt_get: true   
-      state: present 
-      update_cache: true
-      name: 
-        - powertop
-        - powerstat
-        - intel-lpmd
-        - intel-gpu-tools
-        - lm-sensors
-        # - linux-tools-intel - just intel changelog
-        # - intel-media-va-driver-non-free ??
-  - name: Check for /z     
-    stat: path=/z
-    register: p
-
-  - name: import /z
-    become: true
-    command: zpool import z
-    when: not p.stat.exists
-
-  - name: turnoff atime on z
-    become: true
-    command: zfs set atime=off z
-    when: not p.stat.exists
-
-  - name: Configure nfsd
-    become: true
-    copy:
-      src: "files/exports"
-      dest: "/etc/exports"
-      owner: "root"
-      group: "root"
-      mode: 0644
-    register: exports
-
-  - name: export
-    become: true
-    command: exportfs -a
-    when: exports.changed
-
-  - name: Install dev-tools
-    become: true
-    apt: 
-      force_apt_get: true   
-      state: present 
-      update_cache: true
-      name: 
-        - ubuntu-dev-tools 
-        - build-essential
-        - cscope 
-        - elfutils 
-        - libdw-dev 
-        - libncurses5-dev 
-        - manpages-dev 
-        - devscripts 
-        - git 
-        - gitk 
-        - git-email 
-        - debhelper 
-        - sbuild 
-        - subversion 
-        - sysstat 
-        - autoconf 
-        - autotools-dev 
-        - bison 
-        - texinfo 
-        - texi2html 
-        - texlive-latex-base 
-        - ghostscript 
-        - texlive-fonts-recommended 
-        - fakeroot
-        - dh-autoreconf 
-        - dh-translations 
-        - gobject-introspection 
-        - pbuilder-scripts 
-        - jq 
-        - perf-tools-unstable
-        - ansible
-        - ansible-lint
-        - curl
-    register: apt_output
-
-  - name: Transcoding and video
-    become: true
+  - name: Install power and temp utilities
     apt:
       force_apt_get: true
       state: present
       update_cache: true
       name:
+        - powertop
+        - powerstat
+        - intel-lpmd
         - intel-gpu-tools
-        - ffmpeg
-        - mediainfo
-        - lsscsi
-    register: apt_output
-  - debug: var=apt_output
+        - lm-sensors
+        - thermald            # enabled on live bonus
+        - hd-idle             # installed+enabled but HD_IDLE_OPTS="-h" (no-op); kept for parity
+    tags: [packages, power]
 
-  # configure ssh
-  - name: Configure sshd
-    become: true
+  # ---------------------------------------------------------------- zfs pools
+  # Live layout (bonus, 2026-10-05):
+  #   z    = raidz1 of 3x WD100EMAZ (wwn-0x5000cca267c81707/821b0/81dcc)
+  #          + special: mirror of 2x 990 PRO (part1)
+  #          + logs:    mirror of 2x 990 PRO (part2)
+  #          + cache:   2x 990 PRO (part3)
+  #          props: atime=off, recordsize=1M, special_small_blocks=32K
+  #   fast = mirror of 2x 990 PRO (part4), ashift=12, recordsize=1M
+  #          (created: zpool create -o ashift=12 fast <part4> <part4-heatsink>)
+  - name: Check for /z
+    stat: path=/z
+    register: p
+    tags: [zfs]
+
+  - name: import /z
+    command: zpool import z
+    when: not p.stat.exists
+    tags: [zfs]
+
+  - name: tune z dataset
+    zfs:
+      name: z
+      state: present
+      extra_zfs_properties:
+        atime: off
+        recordsize: 1M
+        special_small_blocks: 32K
+    tags: [zfs]
+
+  - name: tune z/backup dataset
+    zfs:
+      name: z/backup
+      state: present
+      extra_zfs_properties:
+        recordsize: 1M
+    tags: [zfs]
+
+  - name: List zpools to detect fast
+    command: zpool list -H -o name
+    register: zpool_list
+    changed_when: false
+    tags: [zfs]
+
+  - name: Create fast pool (L2 NVMe mirror for LXD)
+    # NOTE: pool creation is destructive — only runs when pool absent.
+    # Verify disk by-id paths match the target machine before running.
+    command: >-
+      zpool create -o ashift=12 fast
+      /dev/disk/by-id/nvme-Samsung_SSD_990_PRO_2TB_S7KHNU0X711272T-part4
+      /dev/disk/by-id/nvme-Samsung_SSD_990_PRO_with_Heatsink_2TB_S7DRNJ0YB05517F-part4
+    when: "'fast' not in zpool_list.stdout"
+    tags: [zfs, never-run-automatically]   # manual tag: review disk ids first!
+
+  - name: tune fast dataset
+    zfs:
+      name: fast
+      state: present
+      extra_zfs_properties:
+        recordsize: 1M
+    tags: [zfs]
+
+  - name: ZFS module options (l2arc rebuild after reboot)
+    copy:
+      src: files/zfs.modprobe.conf
+      dest: /etc/modprobe.d/zfs.conf
+      owner: root
+      group: root
+      mode: 0644
+    tags: [zfs, power]
+
+  - name: Enable weekly ZFS trim on both pools
+    systemd:
+      name: "{{ item }}"
+      enabled: true
+      state: started
+      daemon_reload: true
+    loop:
+      - zfs-trim-weekly@z.timer
+      - zfs-trim-weekly@fast.timer
+      - fstrim.timer
+    tags: [zfs, power]
+  # Scrub: live box uses the packaged /etc/cron.d/zfsutils-linux (monthly-ish).
+  # zfs-scrub-*-@.timer units are disabled there — leave as packaged.
+
+  # ---------------------------------------------------------------- nfs
+  - name: Configure nfsd exports
+    copy:
+      src: files/exports
+      dest: /etc/exports
+      owner: root
+      group: root
+      mode: 0644
+    register: exports
+    tags: [nfs]
+  # drift fixed: 192.168.1.1/24 -> 192.168.0.1/16, crossmnt added
+
+  - name: export
+    command: exportfs -a
+    when: exports.changed
+    tags: [nfs]
+
+  - name: NFS mountd manage-gids (group-based ACLs across NFS)
     lineinfile:
-      path: "/etc/ssh/sshd_config"
+      path: /etc/nfs.conf
+      regex: '^#?manage-gids='
+      line: 'manage-gids=y'
+      insertafter: '^\[mountd\]'
+    notify: restart nfs server
+    tags: [nfs]
+
+  # ---------------------------------------------------------------- samba
+  - name: Samba z share
+    blockinfile:
+      path: /etc/samba/smb.conf
+      create: false
+      marker: "# {mark} ANSIBLE MANAGED BLOCK: z share"
+      block: |
+        [z]
+           comment = z on bonus
+           path = /z
+           read only = no
+           browsable = yes
+           guest ok = no
+           valid users = chiluk
+    notify: restart smbd
+    tags: [samba]
+
+  - name: Enable smbd + nmbd
+    systemd:
+      name: "{{ item }}"
+      enabled: true
+      state: started
+    loop: [smbd, nmbd]
+    tags: [samba]
+
+  # ---------------------------------------------------------------- docker
+  - name: Docker CE apt key
+    get_url:
+      url: https://download.docker.com/linux/ubuntu/gpg
+      dest: /etc/apt/keyrings/docker.asc
+      mode: 0644
+    tags: [docker]
+
+  - name: Docker CE apt repo
+    copy:
+      dest: /etc/apt/sources.list.d/docker.list
+      content: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable\n"
+    tags: [docker]
+
+  - name: Install docker-ce
+    apt:
+      force_apt_get: true
+      state: present
+      update_cache: true
+      name: [docker-ce, docker-ce-cli, containerd.io, docker-buildx-plugin, docker-compose-plugin]
+    tags: [docker]
+
+  - name: Enable docker
+    systemd:
+      name: docker
+      enabled: true
+      state: started
+    tags: [docker]
+
+  # ---------------------------------------------------------------- lxd
+  - name: Install LXD snap (5.21/stable)
+    snap:
+      name: lxd
+      channel: 5.21/stable
+      state: present
+    tags: [lxd]
+
+  - name: LXD storage pool fast on the fast ZFS pool
+    # Run as the chiluk user (member of lxd group) after `lxd init` has been done.
+    command: lxc storage create fast zfs source=fast/lxd
+    become_user: chiluk
+    register: lxc_storage
+    failed_when: lxc_storage.rc != 0 and 'already exists' not in lxc_storage.stderr
+    changed_when: lxc_storage.rc == 0
+    tags: [lxd]
+
+  # ---------------------------------------------------------------- ugreen leds
+  # miskcoo/ugreen_leds_controller: dkms kmod + utils. Installed on live bonus as
+  # led-ugreen/0.3 (dkms) + led-ugreen-utils (deb). Services intentionally left
+  # DISABLED: ugreen-diskiomon churns the i801 SMBus ~25/s and blocks s0ix.
+  - name: Install ugreen LED kernel module (dkms)
+    shell: |
+      set -e
+      if [ ! -d /usr/src/led-ugreen-0.3 ]; then
+        tmp=$(mktemp -d)
+        git clone --depth 1 https://github.com/miskcoo/ugreen_leds_controller.git "$tmp/repo"
+        cp -r "$tmp/repo/kmod" /usr/src/led-ugreen-0.3
+        dkms add -m led-ugreen -v 0.3
+        dkms build -m led-ugreen -v 0.3
+        dkms install -m led-ugreen -v 0.3
+        rm -rf "$tmp"
+      fi
+    args:
+      creates: /usr/src/led-ugreen-0.3
+    tags: [leds]
+
+  - name: ugreen LED modules autoload
+    copy:
+      dest: /etc/modules-load.d/ugreen-led.conf
+      content: |
+        i2c-dev
+        led-ugreen
+        ledtrig-oneshot
+        ledtrig-netdev
+      owner: root
+      group: root
+      mode: 0644
+    tags: [leds]
+
+  - name: ugreen LED daemons stay disabled (s0ix blocker)
+    # The led-ugreen-utils deb ships ugreen-probe-leds / ugreen-diskiomon /
+    # ugreen-netdevmon@. On live bonus all three are disabled. If you ever want
+    # the front-panel LEDs back, enable probe-leds + netdevmon only; keep
+    # diskiomon off (LED churn ~25/s over SMBus defeats package sleep).
+    systemd:
+      name: "{{ item }}"
+      enabled: no
+      state: stopped
+      daemon_reload: true
+    loop:
+      - ugreen-diskiomon.service
+      - ugreen-probe-leds.service
+      - ugreen-netdevmon@enp2s0.service
+    failed_when: false   # units may not exist until utils deb is installed
+    tags: [leds, power]
+
+  # ---------------------------------------------------------------- power / iGPU
+  - name: i915/xe deep-power module options
+    copy:
+      src: files/i915.modprobe.conf
+      dest: /etc/modprobe.d/i915.conf
+      owner: root
+      group: root
+      mode: 0644
+    tags: [power]
+
+  - name: Enable intel_lpmd + thermald
+    systemd:
+      name: "{{ item }}"
+      enabled: true
+      state: started
+    loop: [intel_lpmd, thermald]
+    tags: [power]
+
+  # ---------------------------------------------------------------- security
+  - name: Configure sshd
+    lineinfile:
+      path: /etc/ssh/sshd_config
       regex: "^(#)?{{item.key}}"
       line: "{{item.key}} {{item.value}}"
       state: present
     loop:
       - { key: "PermitRootLogin", value: "no" }
-      - { key: "PasswordAuthentication", value: "no" } 
+      - { key: "PasswordAuthentication", value: "no" }
     notify:
       - restart sshd
+    tags: [security]
 
-  # Calls any handlers that have been called up to this point.
-  - name: Flush sshd restart handler.
-    meta: flush_handlers
+  - name: Deploy chiluk authorized_keys (indeed + 2x lp-chiluk + herby)
+    copy:
+      src: files/authorized_keys_chiluk
+      dest: /home/chiluk/.ssh/authorized_keys
+      owner: chiluk
+      group: chiluk
+      mode: 0600
+    tags: [security]
 
-  # configure fail2ban
   - name: create fail2ban/jail.local
-    become: true
-    copy: 
-      src: files/jail.local 
+    copy:
+      src: files/jail.local
       dest: /etc/fail2ban/jail.local
-      owner: "root"
-      group: "root"
+      owner: root
+      group: root
       mode: 0644
     notify: restart fail2ban
+    tags: [security]
+  # NOTE: Ubuntu noble's packaged /etc/fail2ban/jail.d/defaults-debian.conf
+  # enables the sshd jail with nftables+systemd backend. jail.local (byte-identical
+  # to live) does not override that. No extra jail.d file needed.
 
-  - name: Flush fail2ban restart handler.
+  - name: ufw stays installed but disabled (matches live ENABLED=no)
+    ufw:
+      state: disabled
+    tags: [security]
+
+  # Flush handlers mid-play so sshd/fail2ban restarts land before we finish.
+  - name: Flush handlers
     meta: flush_handlers
+    tags: [security]
 
+  # ---------------------------------------------------------------- hdparm
   - name: Configure hdparm to spin down drives
-    become: true
     copy:
-      src: "files/hdparm.conf"
-      dest: "/etc/"
-      owner: "root"
-      group: "root"
+      src: files/hdparm.conf
+      dest: /etc/hdparm.conf
+      owner: root
+      group: root
       mode: 0644
     register: hdparm
+    tags: [power]
 
-  - name: run hdparm 
-    become: true
+  - name: run hdparm
     command: /usr/lib/pm-utils/power.d/95hdparm-apm resume
     when: hdparm.changed
+    tags: [power]
+
+  # ---------------------------------------------------------------- livepatch
+  - name: Install canonical-livepatch snap (enable needs token - manual)
+    snap:
+      name: canonical-livepatch
+      state: present
+    tags: [packages]
+  # Live bonus: installed but NOT enabled ("Machine is not enabled").
+  # After run: sudo canonical-livepatch enable <token from ubuntu.com/advantage>
 
   handlers:
     - name: restart sshd
-      become: true
       service:
         name: ssh
         state: restarted
-  
+
     - name: restart fail2ban
-      become: true
       service:
         name: fail2ban
         state: restarted
-  
-# - hosts: bonus
-#   tasks:
-#   - name: Configure backups
-#     cron:
-#       cronfile: rsnapshot
-#       name: "rsnapshot weekly"
-#       minute: "0"
-#       hour: "3"
-#       weekday: "6"
-#       job: "/usr/bin/rsnapshot weekly"
-#     cron:
-#       name: "rsnapshot monthly"
-#       minute: "30"
-#       hour: "1"
-#       day: "1"
-#       job: "/usr/bin/rsnapshot monthly"
 
-# # Download out of repo packages
-#   - name: Download out of repo packages
-#     become: true
-#     get_url:
-#       url:
-#         - https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+    - name: restart nfs server
+      service:
+        name: nfs-server
+        state: restarted
 
-#       dest: Downloads
-
-#   - name: Install out of repo Packages
-#     apt: 
-#       state: present 
-#       deb: 
-#         - Downloads/google-chrome-stable_current_amd64.deb
-#     register: apt_output
-
-#   - debug: var=apt_output
-
-# TODO Add install Chrome
-# TODO Add install jetbrains toolbox
-# TODO Printer setup
-# TODO Add mysql-workbench-community
-# Add discord, slack
-# change keybinding for ibus-setup emojis to super+e to avoid interfereing with ctrl+shift+e vert split for terminator.
-#   Ref: https://bugs.launchpad.net/ubuntu/+source/terminator/+bug/1738500
-
+    - name: restart smbd
+      service:
+        name: smbd
+        state: restarted

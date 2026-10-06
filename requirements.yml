@@ -1,0 +1,5 @@
+---
+# ansible-galaxy collection install -r requirements.yml
+# (needed by nas.yml: zfs, snap, ufw modules)
+collections:
+  - name: community.general
