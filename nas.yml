@@ -248,26 +248,21 @@
     tags: [lxd]
 
   # ---------------------------------------------------------------- ugreen leds
-  # miskcoo/ugreen_leds_controller: dkms kmod + utils. Installed on live bonus as
-  # led-ugreen/0.3 (dkms) + led-ugreen-utils (deb). Services intentionally left
+  # miskcoo/ugreen_leds_controller v0.3. Live bonus installs the OFFICIAL release
+  # debs (led-ugreen-dkms + led-ugreen-utils); the dkms deb's postinst runs
+  # `dkms add/build/install` itself, so we do NOT hand-clone the kmod (that would
+  # fight dpkg ownership of /usr/src/led-ugreen-0.3). Services intentionally left
   # DISABLED: ugreen-diskiomon churns the i801 SMBus ~25/s and blocks s0ix.
-  - name: Install ugreen LED kernel module (dkms)
-    shell: |
-      set -e
-      if [ ! -d /usr/src/led-ugreen-0.3 ]; then
-        tmp=$(mktemp -d)
-        git clone --depth 1 https://github.com/miskcoo/ugreen_leds_controller.git "$tmp/repo"
-        cp -r "$tmp/repo/kmod" /usr/src/led-ugreen-0.3
-        dkms add -m led-ugreen -v 0.3
-        dkms build -m led-ugreen -v 0.3
-        dkms install -m led-ugreen -v 0.3
-        rm -rf "$tmp"
-      fi
-    args:
-      creates: /usr/src/led-ugreen-0.3
+  - name: Install ugreen LED debs (dkms kmod + utils) from GitHub release
+    apt:
+      deb:
+        - https://github.com/miskcoo/ugreen_leds_controller/releases/download/v0.3/led-ugreen-dkms_0.3_amd64.deb
+        - https://github.com/miskcoo/ugreen_leds_controller/releases/download/v0.3/led-ugreen-utils_0.3_amd64.deb
+      state: present
     tags: [leds]
 
   - name: ugreen LED modules autoload
+    # The debs ship NO modules-load file, so we add it.
     copy:
       dest: /etc/modules-load.d/ugreen-led.conf
       content: |
@@ -281,6 +276,9 @@
     tags: [leds]
 
   - name: ugreen LED daemon config (colors/brightness/health checks)
+    # User copy of the deb's /etc/ugreen-leds.example.conf with local tweaks
+    # (brightness 128, CHECK_ZPOOL=true, check intervals 60s). Nothing else in
+    # ansible sets this; the deb only ships the .example.
     copy:
       src: files/ugreen-leds.conf
       dest: /etc/ugreen-leds.conf
