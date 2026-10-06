@@ -122,7 +122,6 @@
       force_apt_get: true
       state: present
       name:
-        - easyeffects
         - ffmpeg
         - ghostscript
         - mediainfo
@@ -152,7 +151,6 @@
       name:
         - git-email
         - gitk
-        - subversion
     tags: [packages]
 
   # ------------------------------------------------ kernel metas & tools
