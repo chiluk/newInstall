@@ -280,6 +280,15 @@
       mode: 0644
     tags: [leds]
 
+  - name: ugreen LED daemon config (colors/brightness/health checks)
+    copy:
+      src: files/ugreen-leds.conf
+      dest: /etc/ugreen-leds.conf
+      owner: root
+      group: root
+      mode: 0644
+    tags: [leds]
+
   - name: ugreen LED daemons stay disabled (s0ix blocker)
     # The led-ugreen-utils deb ships ugreen-probe-leds / ugreen-diskiomon /
     # ugreen-netdevmon@. On live bonus all three are disabled. If you ever want
@@ -302,6 +311,24 @@
     copy:
       src: files/i915.modprobe.conf
       dest: /etc/modprobe.d/i915.conf
+      owner: root
+      group: root
+      mode: 0644
+    tags: [power]
+
+  - name: Disable DRM KMS polling (headless box)
+    copy:
+      src: files/drm-poll.modprobe.conf
+      dest: /etc/modprobe.d/drm-poll.conf
+      owner: root
+      group: root
+      mode: 0644
+    tags: [power]
+
+  - name: NIC ASPM / WOL options (r8127)
+    copy:
+      src: files/r8127.modprobe.conf
+      dest: /etc/modprobe.d/r8127.conf
       owner: root
       group: root
       mode: 0644

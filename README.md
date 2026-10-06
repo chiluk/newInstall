@@ -63,6 +63,27 @@ nas.yml was rewritten to match the live state of bonus (Ubuntu 24.04.5, kernel
 ### Dropped from original list (not on live box)
 - rng-tools (removed at some point), libncurses5-dev (never on noble).
 
+### dpkg conffile audit (authoritative, 2026-10-05)
+Diffed every conffile md5 in /var/lib/dpkg/status against the live files across
+1,786 packages. Result: only ONE modified package conffile:
+- /etc/hdparm.conf (our spin-down config — already managed).
+Everything else custom in /etc is admin-added (unowned by any package).
+Notable unowned files now captured by the playbook:
+- /etc/modprobe.d/{zfs,i915,r8127,drm-poll}.conf
+- /etc/modules-load.d/ugreen-led.conf, /etc/ugreen-leds.conf
+- /etc/exports, /etc/fail2ban/jail.local, /etc/samba/smb.conf [z] block
+- /etc/apt/sources.list.d/docker.list + keyrings/docker.asc
+- /etc/ssh/sshd_config edits, authorized_keys
+Notable unowned files intentionally NOT managed (installer/system artifacts):
+- /etc/cloud/cloud.cfg.d/* — installer artifacts; note /etc/cloud/cloud-init.disabled
+  is present (installer disabled cloud-init after first boot). Leave as-is.
+- /etc/default/grub — one drift of note: GRUB_CMDLINE_LINUX_DEFAULT was
+  "pcie_aspm=force" at install (see grub.ucf-dist), later reverted to "".
+  ASPM is instead enabled per-driver via r8127.conf (aspm=1). If reinstalling,
+  do NOT re-add pcie_aspm=force globally.
+- /etc/hosts.allow, /etc/hosts.deny — empty of rules (all comments).
+- passwd/shadow/group/machine-id/zpool.cache/console-setup caches — system state.
+
 ### Manual steps after a fresh run
 1. `sudo canonical-livepatch enable <token>` (from ubuntu.com/advantage).
 2. `lxd init` if not preseeded, then the storage task creates pool `fast`.
