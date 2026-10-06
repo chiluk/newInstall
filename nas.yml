@@ -3,10 +3,19 @@
 # 2026-10-06 against `apt-mark showmanual` (user-selected set).
 # See README.md "bonus drift report" for what changed since the original nas.yml.
 #
-# Tags: packages, zfs, nfs, samba, docker, lxd, leds, security, power
+# Tags: packages, network, zfs, nfs, samba, podman, lxd, leds, security, power
 - name: Create a new NAS
   hosts: nas
   become: true
+  vars:
+    # Physical NICs for the bond. bonus has 2x RTL8127 10GbE but the 2nd is
+    # disabled in BIOS for power testing (invisible to lspci). active-backup
+    # keeps the bond single-NIC safe today; when the 2nd NIC is enabled in
+    # BIOS, add its interface name below and re-run the network tag.
+    bond_primary: enp2s0
+    bond_slaves:
+      - enp2s0
+      # - enp3s0   # 2nd RTL8127 — enable in BIOS, then uncomment (verify name)
   tasks:
 
   # ---------------------------------------------------------------- packages
@@ -253,6 +262,39 @@
   # Scrub: live box uses the packaged /etc/cron.d/zfsutils-linux (monthly-ish).
   # zfs-scrub-*-@.timer units are disabled there — leave as packaged.
 
+  # ---------------------------------------------------------------- network
+  # Topology (2026-10-06): physical NICs -> bond0 (active-backup, primary
+  # enp2s0) -> br0 (LAN bridge, DHCP). LXD (profile parent=br0) and podman
+  # (host-mode + NAT egress) ride br0, so all container stacks egress via
+  # the bond. Template filters bond_slaves against ansible_interfaces so a
+  # BIOS-disabled NIC never breaks netplan.
+  - name: Remove installer netplan (50-cloud-init.yaml; cloud-init is disabled)
+    # Must go: it defines enp2s0 with dhcp4 and would override our config
+    # (netplan merges by filename order, 50 > 01).
+    file:
+      path: /etc/netplan/50-cloud-init.yaml
+      state: absent
+    tags: [network]
+
+  - name: Write netplan bond0->br0 config
+    template:
+      src: files/netplan.yaml.j2
+      dest: /etc/netplan/01-bond-bridge.yaml
+      owner: root
+      group: root
+      mode: 0600
+    register: netplan_cfg
+    tags: [network]
+
+  - name: Apply netplan (bond topology change — brief network blip)
+    # NOT run by default: moving enp2s0 out of br0 into bond0 re-converges
+    # the bridge and can drop SSH for a few seconds. On a live box prefer
+    # `sudo netplan try` (auto-rolls back on lockout). To apply via ansible:
+    #   ansible-playbook ... --tags network --skip-tags never-run-automatically
+    command: netplan apply
+    when: netplan_cfg.changed
+    tags: [network, never-run-automatically]
+
   # ---------------------------------------------------------------- nfs
   - name: Configure nfsd exports
     copy:
@@ -304,34 +346,55 @@
     loop: [smbd, nmbd]
     tags: [samba]
 
-  # ---------------------------------------------------------------- docker
-  - name: Docker CE apt key
-    get_url:
-      url: https://download.docker.com/linux/ubuntu/gpg
-      dest: /etc/apt/keyrings/docker.asc
-      mode: 0644
-    tags: [docker]
-
-  - name: Docker CE apt repo
-    copy:
-      dest: /etc/apt/sources.list.d/docker.list
-      content: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable\n"
-    tags: [docker]
-
-  - name: Install docker-ce
+  # ---------------------------------------------------------------- podman
+  # MIGRATION (2026-10-06): docker -> podman. Playbook now installs podman;
+  # docker-ce is no longer installed on fresh builds. Live migration of the
+  # plex/ARM containers happens at the 26.04 reinstall (see RECOVERY.md).
+  #
+  # noble ships podman 4.9.x (universe) with netavark + aardvark-dns —
+  # no upstream repo needed. Rootful mode (system podman) matches the old
+  # docker behavior for privileged ARM + /dev/dri passthrough.
+  - name: Install podman + compose + network stack
     apt:
       force_apt_get: true
       state: present
       update_cache: true
-      name: [docker-ce, docker-ce-cli, containerd.io, docker-buildx-plugin, docker-compose-plugin]
-    tags: [docker]
+      name:
+        - podman
+        - podman-compose
+        - netavark
+        - aardvark-dns
+        - containernetworking-plugins   # CNI fallback / compat
+        - slirp4netns                   # rootless net (future-proofing)
+    tags: [podman]
 
-  - name: Enable docker
+  - name: Enable podman.socket (docker-compatible API for rootful podman)
+    # Socket-activated: podman.service starts on demand, no need to enable it.
     systemd:
-      name: docker
+      name: podman.socket
       enabled: true
       state: started
-    tags: [docker]
+    tags: [podman]
+
+  - name: Docker CE stays absent (migrated to podman)
+    apt:
+      force_apt_get: true
+      state: absent
+      name: [docker-ce, docker-ce-cli, containerd.io, docker-buildx-plugin, docker-compose-plugin]
+    tags: [podman]
+  # Networking note: podman's default network (podman0, 10.88.0.0/16,
+  # netavark-managed) is created automatically on first use and NATs
+  # through the host default route = bond0, so bridged containers egress
+  # via the bond. plex runs network_mode: host (direct bond0 egress);
+  # ARM uses port mapping through the same route. No custom network files
+  # needed — hand-written netavark JSON with fixed IDs is fragile; let
+  # podman own it. For a LAN-attached network later:
+  #   podman network create --bridge br0 lan
+  #
+  # On the CURRENT live box the absent-task would remove docker while
+  # plex/ARM still run on it — that's why live migration is deferred to
+  # the 26.04 reinstall. On a fresh install it's a no-op. To keep docker
+  # on the live box until then: --skip-tags podman.
 
   # ---------------------------------------------------------------- lxd
   - name: Install LXD snap (5.21/stable)
@@ -348,6 +411,23 @@
     register: lxc_storage
     failed_when: lxc_storage.rc != 0 and 'already exists' not in lxc_storage.stderr
     changed_when: lxc_storage.rc == 0
+    tags: [lxd]
+
+  - name: Read LXD default profile eth0 parent
+    command: lxc profile device get default eth0 parent
+    become_user: chiluk
+    register: lxc_eth0_parent
+    changed_when: false
+    failed_when: lxc_eth0_parent.rc != 0 and 'not found' not in (lxc_eth0_parent.stderr | default(''))
+    tags: [lxd]
+
+  - name: LXD default profile NIC rides br0 (bond-backed bridge)
+    # Idempotent: only sets when parent isn't already br0. Live box already
+    # has this; the task asserts it so reinstalls match. Instances using the
+    # default profile egress via bond0.
+    command: lxc profile device set default eth0 parent=br0 nictype=bridged
+    become_user: chiluk
+    when: lxc_eth0_parent.stdout | default('') | trim != 'br0'
     tags: [lxd]
 
   # ---------------------------------------------------------------- ugreen leds

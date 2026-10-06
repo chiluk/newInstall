@@ -4,8 +4,10 @@
 # All persistent state lives in bind mounts under /z (survives OS reinstall as long
 # as the z pool is imported, not wiped).
 #
-# Usage after reinstall:  docker compose -f docker-compose.yml up -d
-# (compose v2 plugin; or `docker-compose`)
+# Usage after reinstall (podman):  podman-compose -f docker-compose.yml up -d
+# (podman-compose is docker-compose compatible; the file itself needs no changes.
+#  For the docker CLI compat socket: systemctl enable --now podman.socket,
+#  then DOCKER_HOST=unix:///run/podman/podman.sock docker compose ... also works.)
 services:
   plex:
     image: plexinc/pms-docker

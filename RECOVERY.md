@@ -57,14 +57,20 @@ All their state is bind-mounted on /z, so nothing else needs saving for them.
     # as they are now, no known_hosts churn beyond what you already accepted.
     # br0 must exist first (netplan: bridge with enp2s0, DHCP on br0).
 
-### 3. Restore docker
-    # install docker-ce (nas.yml does this)
-    docker load -i /z/backup/reinstall*/bookworm-build.tar   # optional
-    cd /path/to/newInstall/files && docker compose up -d
+### 3. Restore containers (podman — migrated from docker 2026-10-06)
+    # install podman + podman-compose (nas.yml does this; tag: podman)
+    systemctl enable --now podman.socket
+    podman load -i /z/backup/reinstall*/bookworm-build.tar   # optional
+    cd /path/to/newInstall/files && podman-compose up -d
     # plex + ARM images pull from Docker Hub automatically
+    # (compose file is unchanged — podman-compose is compatible)
+    # NOTE: containers under podman-compose do NOT auto-start on boot by
+    # default. Either enable podman-restart.service-style units or use:
+    #   podman generate systemd --new --name plex -t 30 > /etc/systemd/system/plex.service
+    # (repeat for ARM), then systemctl enable --now plex ARM.
 
 ### 4. Verify
-    docker ps                     # plex + ARM
+    podman ps                     # plex + ARM
     lxc list                      # hermes RUNNING at 192.168.0.4
     # plex claim token is in compose env; ARM config on /z.
 

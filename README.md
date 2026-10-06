@@ -12,6 +12,14 @@ nas.yml was rewritten to match the live state of bonus (Ubuntu 24.04.5, kernel
 7.0.0-34-generic HWE-edge). Differences found and folded in:
 
 ### Network / NFS
+- NEW (2026-10-06): bond topology now managed by ansible (tag: network).
+  Physical NICs -> bond0 (active-backup, primary enp2s0, miimon 100) ->
+  br0 (bridge, DHCP metric 100). Template: files/netplan.yaml.j2.
+  bonus's 2nd RTL8127 is BIOS-disabled for power testing; when re-enabled,
+  uncomment its iface in the `bond_slaves` var and re-run --tags network.
+  `netplan apply` is tagged never-run-automatically (SSH blip risk; prefer
+  `sudo netplan try` on a live box). Installer 50-cloud-init.yaml is removed
+  (it would override our config; cloud-init is already disabled on the box).
 - LAN moved 192.168.1.1/24 -> 192.168.0.1/16 (files/exports updated).
 - NFS export gained `crossmnt` (so z/backup shows under /z for v4 clients).
 - /etc/nfs.conf: `[mountd] manage-gids=y` (new task).
@@ -31,8 +39,15 @@ nas.yml was rewritten to match the live state of bonus (Ubuntu 24.04.5, kernel
 
 ### Services added since original yaml (all enabled on live box)
 - samba: [z] share (rw, valid users chiluk) + smbd/nmbd.
-- docker-ce 29.x from download.docker.com repo (key /etc/apt/keyrings/docker.asc).
+- CHANGED 2026-10-06: docker-ce replaced by PODMAN (tag: podman).
+  Playbook installs podman 4.9.x + podman-compose + netavark/aardvark-dns
+  from noble universe (no upstream repo) and asserts docker-ce ABSENT.
+  podman.socket enabled for docker-API compat. Live plex/ARM containers
+  migrate at the 26.04 reinstall (see RECOVERY.md step 3); do NOT run
+  --tags podman against the live box before then (it removes docker under
+  the running containers).
 - LXD snap 5.21/stable + zfs storage pool `fast` (source=fast/lxd).
+  NEW: default profile eth0 pinned to parent=br0 (bond-backed) by ansible.
 - atop, pcp (pmcd/pmlogger), schroot, unattended-upgrades, thermald.
 - canonical-livepatch snap installed but NOT enabled (needs token).
 
