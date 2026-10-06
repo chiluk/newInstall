@@ -186,13 +186,16 @@
     tags: [zfs]
 
   - name: tune z dataset
+    # Sizes given in BYTES: the community.general.zfs module compares against
+    # `zfs get -H -p` (parsable/byte output), so "1M"/"32K" would never match
+    # the stored 1048576/32768 and the task would report changed every run.
     zfs:
       name: z
       state: present
       extra_zfs_properties:
         atime: off
-        recordsize: 1M
-        special_small_blocks: 32K
+        recordsize: "1048576"  # 1M
+        special_small_blocks: "32768"  # 32K
     tags: [zfs]
 
   - name: tune z/backup dataset
@@ -200,7 +203,7 @@
       name: z/backup
       state: present
       extra_zfs_properties:
-        recordsize: 1M
+        recordsize: "1048576"  # 1M
     tags: [zfs]
 
   - name: List zpools to detect fast
@@ -224,7 +227,7 @@
       name: fast
       state: present
       extra_zfs_properties:
-        recordsize: 1M
+        recordsize: "1048576"  # 1M (bytes — see note on tune z dataset)
     tags: [zfs]
 
   - name: ZFS module options (l2arc rebuild after reboot)
@@ -354,11 +357,15 @@
   # fight dpkg ownership of /usr/src/led-ugreen-0.3). Services intentionally left
   # DISABLED: ugreen-diskiomon churns the i801 SMBus ~25/s and blocks s0ix.
   - name: Install ugreen LED debs (dkms kmod + utils) from GitHub release
+    # NOTE: apt's `deb` parameter is a single path/URL (type=path), NOT a list —
+    # passing a list makes it try to fetch the literal "['https://...'" string.
+    # Loop one URL per task invocation instead.
     apt:
-      deb:
-        - https://github.com/miskcoo/ugreen_leds_controller/releases/download/v0.3/led-ugreen-dkms_0.3_amd64.deb
-        - https://github.com/miskcoo/ugreen_leds_controller/releases/download/v0.3/led-ugreen-utils_0.3_amd64.deb
+      deb: "{{ item }}"
       state: present
+    loop:
+      - https://github.com/miskcoo/ugreen_leds_controller/releases/download/v0.3/led-ugreen-dkms_0.3_amd64.deb
+      - https://github.com/miskcoo/ugreen_leds_controller/releases/download/v0.3/led-ugreen-utils_0.3_amd64.deb
     tags: [leds]
 
   - name: ugreen LED modules autoload
