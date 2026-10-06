@@ -26,15 +26,16 @@ lxc storage show fast      > "$DEST/lxd-storage-fast.yaml"
 
 # ---------------------------------------------------------------- docker images
 # /var/lib/docker is on the ROOT disk — all images die on reinstall.
-# Public images re-pull; CUSTOM ones must be saved or they are gone forever.
+# 2026-10-05: user removed the ollama / homeassistant / ipex-llm-chiluk
+# containers. Remaining: plex + ARM (public images, re-pull fine).
+# Only bookworm-build is a custom local image with no Dockerfile — save it
+# if you still need the pbuilder environment.
 echo ">>> Saving custom docker images (no Dockerfile exists on this box)"
-docker save ipex_llm_chiluk:latest  -o "$DEST/ipex_llm_chiluk.tar"   # ~20G
 docker save bookworm-build:latest    -o "$DEST/bookworm-build.tar"    # ~700M (optional)
-
-# ---------------------------------------------------------------- ollama models
-# 8G of models on root disk (/home/chiluk/.ollama) -> move onto z.
-echo ">>> Copying ollama models to /z/ollama"
-rsync -aHAX --info=progress2 /home/chiluk/.ollama/ /z/ollama/
+# NOTE: leftover custom images still on the box (ipex_llm_chiluk ~20G,
+# intelanalytics/ipex-llm-inference-cpp-xpu ~22G) are no longer used by any
+# container. Save them here if you want them after the reinstall, otherwise
+# `docker rmi` them to reclaim ~42G on the root disk.
 
 # ---------------------------------------------------------------- checksums
 echo ">>> Checksumming"
