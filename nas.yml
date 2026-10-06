@@ -1,5 +1,6 @@
 ---
-# NAS profile — synced against live bonus on 2026-10-05.
+# NAS profile — synced against live bonus on 2026-10-05; packages re-synced
+# 2026-10-06 against `apt-mark showmanual` (user-selected set).
 # See README.md "bonus drift report" for what changed since the original nas.yml.
 #
 # Tags: packages, zfs, nfs, samba, docker, lxd, leds, security, power
@@ -65,6 +66,107 @@
         - thermald            # enabled on live bonus
         - hd-idle             # installed+enabled but HD_IDLE_OPTS="-h" (no-op); kept for parity
     tags: [packages, power]
+
+  # ------------------------------------------------ dev / packaging toolchain
+  # User-selected (apt-mark showmanual) on live bonus, re-synced 2026-10-06.
+  - name: Install dev and packaging toolchain
+    apt:
+      force_apt_get: true
+      state: present
+      name:
+        - ansible
+        - ansible-lint
+        - build-essential
+        - autoconf
+        - autotools-dev
+        - bison
+        - debhelper
+        - devscripts
+        - dh-autoreconf
+        - dh-translations
+        - fakeroot
+        - gobject-introspection
+        - libdw-dev
+        - libncurses-dev        # noble replacement for the old libncurses5-dev
+        - manpages-dev
+        - pbuilder-scripts
+        - sbuild
+        - ubuntu-dev-tools
+        - texinfo
+        - texi2html
+        - texlive-fonts-recommended
+        - texlive-latex-base
+        - python3-full
+    tags: [packages]
+
+  # ------------------------------------------------ tracing / debugging
+  - name: Install tracing and debugging tools
+    apt:
+      force_apt_get: true
+      state: present
+      name:
+        - bpftrace
+        - elfutils
+        - fatrace
+        - perf-tools-unstable
+        - sysstat
+        - i2c-tools
+        - cscope
+        - jq
+        - tinymembench
+    tags: [packages]
+
+  # ------------------------------------------------ media utilities
+  - name: Install media utilities
+    apt:
+      force_apt_get: true
+      state: present
+      name:
+        - easyeffects
+        - ffmpeg
+        - ghostscript
+        - mediainfo
+    tags: [packages]
+
+  # ------------------------------------------------ storage / recovery
+  - name: Install storage and recovery tools
+    apt:
+      force_apt_get: true
+      state: present
+      name:
+        - 7zip
+        - exfatprogs
+        - gddrescue
+        - myrescue
+        - nvme-cli
+        - testdisk
+        - lsscsi
+        - rng-tools-debian    # noble replacement for the removed rng-tools
+    tags: [packages]
+
+  # ------------------------------------------------ extra VCS front-ends
+  - name: Install extra VCS tools
+    apt:
+      force_apt_get: true
+      state: present
+      name:
+        - git-email
+        - gitk
+        - subversion
+    tags: [packages]
+
+  # ------------------------------------------------ kernel metas & tools
+  - name: Install kernel meta-packages and tools
+    # linux-generic (GA) is manual on live alongside the HWE-edge meta above —
+    # the box keeps both kernel tracks. linux-tools metas provide perf/turbostat.
+    apt:
+      force_apt_get: true
+      state: present
+      name:
+        - linux-generic
+        - linux-tools-generic-7.0
+        - linux-tools-generic-hwe-24.04
+    tags: [packages]
 
   # ---------------------------------------------------------------- zfs pools
   # Live layout (bonus, 2026-10-05):
