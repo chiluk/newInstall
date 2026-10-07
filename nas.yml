@@ -209,14 +209,18 @@
   #          props: atime=off, recordsize=1M, special_small_blocks=32K
   #   fast = mirror of 2x 990 PRO (part4), ashift=12, recordsize=1M
   #          (created: zpool create -o ashift=12 fast <part4> <part4-heatsink>)
-  - name: Check for /z
-    stat: path=/z
-    register: p
+  - name: List currently imported zpools
+    command: zpool list -H -o name
+    register: zpool_imported
+    changed_when: false
     tags: [zfs]
 
-  - name: import /z
-    command: zpool import z
-    when: not p.stat.exists
+  - name: Import zfs pools (z and fast) if not already imported
+    # Imports by name; only touches pools that are exported but available.
+    # Idempotent: skipped per-pool when already imported.
+    command: zpool import {{ item }}
+    loop: [z, fast]
+    when: item not in zpool_imported.stdout
     tags: [zfs]
 
   - name: tune z dataset
