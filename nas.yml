@@ -117,6 +117,8 @@
         - dh-autoreconf
         - dh-translations
         - fakeroot
+        - git-email
+        - gitk
         - gobject-introspection
         - libdw-dev
         - libncurses-dev        # noble replacement for the old libncurses5-dev
@@ -173,16 +175,6 @@
         - testdisk
         - lsscsi
         - rng-tools-debian    # noble replacement for the removed rng-tools
-    tags: [packages]
-
-  # ------------------------------------------------ extra VCS front-ends
-  - name: Install extra VCS tools
-    apt:
-      force_apt_get: true
-      state: present
-      name:
-        - git-email
-        - gitk
     tags: [packages]
 
   # ------------------------------------------------ kernel metas & tools

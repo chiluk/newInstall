@@ -96,11 +96,13 @@ nas.yml was rewritten to match the live state of bonus (Ubuntu 24.04.5, kernel
 
 ### Package re-sync (2026-10-06, apt-mark showmanual vs nas.yml)
 Diffed the 119 user-selected (manual) packages on live bonus against the
-playbook. 48 missing user-selected packages added in six grouped tasks
-(dev/packaging, tracing/debug, media, storage/recovery, VCS, kernel metas):
+playbook. 48 missing user-selected packages added in five grouped tasks
+(dev/packaging incl. VCS extras, tracing/debug, media, storage/recovery,
+kernel metas):
 - dev/packaging: ansible, ansible-lint, build-essential, autoconf,
   autotools-dev, bison, debhelper, devscripts, dh-autoreconf,
-  dh-translations, fakeroot, gobject-introspection, libdw-dev,
+  dh-translations, fakeroot, git-email, gitk, gobject-introspection,
+  libdw-dev,
   libncurses-dev, manpages-dev, pbuilder-scripts, sbuild,
   ubuntu-dev-tools, texinfo, texi2html, texlive-fonts-recommended,
   texlive-latex-base, python3-full
@@ -109,7 +111,6 @@ playbook. 48 missing user-selected packages added in six grouped tasks
 - media: ffmpeg, ghostscript, mediainfo
 - storage/recovery: 7zip, exfatprogs, gddrescue, myrescue, nvme-cli,
   testdisk, lsscsi, rng-tools-debian
-- VCS: git-email, gitk
 - kernel metas: linux-generic (GA, manual on live alongside HWE-edge),
   linux-tools-generic-7.0, linux-tools-generic-hwe-24.04
 
