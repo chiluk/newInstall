@@ -254,6 +254,12 @@
     tags: [zfs, power]
 
   - name: Enable weekly ZFS trim on both pools
+    # Safe for the HDDs: zpool trim queries per-vdev discard support and the
+    # WD100EMAZ SMR drives report discard_max_bytes=0, so ZFS marks them
+    # "(trim unsupported)" and skips them entirely (verified via
+    # `zpool status -t z`, Oct 2026). The weekly z trim only touches the
+    # special+logs NVMe regions and finishes in seconds. Cache vdevs are
+    # never trimmed by ZFS by design (volatile cache, no wear benefit).
     systemd:
       name: "{{ item }}"
       enabled: true
