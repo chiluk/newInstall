@@ -172,7 +172,7 @@
       force_apt_get: true
       state: present
       name: "{{ kernel_pkgs }}"
-    when: ansible_distribution_release != 'resolute'
+    when: ansible_distribution_release == 'noble'
     tags: [packages]
 
   # ---------------------------------------------------------------- zfs pools
