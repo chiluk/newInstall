@@ -72,6 +72,14 @@ nas.yml was rewritten to match the live state of bonus (Ubuntu 24.04.5, kernel
 ### Kernel
 - HWE edge meta-package `linux-generic-hwe-24.04-edge` (running 7.0.0-34).
   Original yaml installed no kernel meta — reinstalls would stay on GA 6.8.
+- NEW (2026-10-06): kernel metas are release-conditional via `kernel_pkgs`
+  play var. On 26.04 (resolute) the native names are used:
+  linux-generic-hwe-26.04-edge, linux-generic, linux-tools-generic,
+  linux-tools-generic-hwe-26.04. (The -hwe-24.04 names still resolve on
+  resolute but are transitional stubs.) The remaining apt names were
+  spot-checked against the resolute archive (all power/dev/tracing/media/
+  storage/podman packages resolve unchanged; the rest are stable core
+  names like openssh-server/vim/samba/zfsutils-linux).
 
 ### Security
 - sshd PermitRootLogin no / PasswordAuthentication no: unchanged, still true.

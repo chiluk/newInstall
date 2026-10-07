@@ -21,6 +21,25 @@
       - enp49s0
       - enp87s0
       - enp88s0
+
+    # Kernel meta-packages per Ubuntu release (verified against
+    # packages.ubuntu.com/resolute 2026-10-06). On 26.04 (resolute) the
+    # -hwe-24.04 names still exist but are TRANSITIONAL stubs that just
+    # pull the 26.04 metas — use the native names on resolute so the
+    # transitional layer can be dropped cleanly later.
+    # All other packages in this playbook keep identical names on noble
+    # and resolute (checked: every apt name resolves in resolute).
+    kernel_pkgs_noble:
+      - linux-generic-hwe-24.04-edge
+      - linux-generic
+      - linux-tools-generic-7.0
+      - linux-tools-generic-hwe-24.04
+    kernel_pkgs_resolute:
+      - linux-generic-hwe-26.04-edge
+      - linux-generic
+      - linux-tools-generic
+      - linux-tools-generic-hwe-26.04
+    kernel_pkgs: "{{ kernel_pkgs_resolute if ansible_distribution_release == 'resolute' else kernel_pkgs_noble }}"
   tasks:
 
   # ---------------------------------------------------------------- packages
@@ -60,7 +79,6 @@
         - samba                # SMB/CIFS server ([z] share, see below)
         - unattended-upgrades  # periodic list-update + upgrade both =1
         - dkms                 # needed for led-ugreen kmod
-        - linux-generic-hwe-24.04-edge   # live kernel is 7.0.0-34 HWE-edge, not GA
     tags: [packages]
   # NOTE: rng-tools and libncurses5-dev from the original list are NOT installed
   # on live bonus (rng-tools removed; libncurses5-dev never installed on noble).
@@ -169,15 +187,17 @@
 
   # ------------------------------------------------ kernel metas & tools
   - name: Install kernel meta-packages and tools
-    # linux-generic (GA) is manual on live alongside the HWE-edge meta above —
-    # the box keeps both kernel tracks. linux-tools metas provide perf/turbostat.
+    # Release-conditional via kernel_pkgs var (see play vars):
+    #   noble:    linux-generic-hwe-24.04-edge + linux-generic +
+    #             linux-tools-generic-7.0 + linux-tools-generic-hwe-24.04
+    #   resolute: linux-generic-hwe-26.04-edge + linux-generic +
+    #             linux-tools-generic + linux-tools-generic-hwe-26.04
+    # (live kernel is 7.0.0-34 HWE-edge, not GA; linux-generic GA meta is
+    #  manual on live alongside the HWE-edge meta — box keeps both tracks)
     apt:
       force_apt_get: true
       state: present
-      name:
-        - linux-generic
-        - linux-tools-generic-7.0
-        - linux-tools-generic-hwe-24.04
+      name: "{{ kernel_pkgs }}"
     tags: [packages]
 
   # ---------------------------------------------------------------- zfs pools
